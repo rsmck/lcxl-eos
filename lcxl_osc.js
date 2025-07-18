@@ -29,6 +29,7 @@ const DEBUG = false;
 
 // State
 var strLastCueState = '';
+var intLastAct = 0;
 var bolShiftPressed = false;
 var bolReady = false;
 var bolDeskLocked = false;
@@ -313,6 +314,7 @@ input.on('message', (deltaTime, message) => {
           args: [{type: "f", value: dir}]
       }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
     }
+    intLastAct = Date.now();
   } else {
     if (DEBUG) console.log(`Received UNKNOWN MIDI message: [${message.join(', ')}] (deltaTime: ${deltaTime})`);
   }
@@ -329,6 +331,7 @@ osc.on("message", function (oscMsg) {
     }
     strLastCueState = oscMsg.args[0].value;
   } else if (bolReady && oscMsg.address.match(/\/active\/wheel/i)) {
+    if (now > intLastAct+300) return;
     const parts = oscMsg.args[0].value.match(/(.*)\[/);
     const label = parts[1].trim();
     const value = oscMsg.args[2].value.toFixed(2)+'';
