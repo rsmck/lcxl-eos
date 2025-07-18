@@ -19,9 +19,12 @@ This is very much configured how I use it, feel free to change the code. I plan 
 
 The encoders are arranged as follows which makes sense for most of my own shows. Again, I will make a GUI for it at some point
 
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 
+|---------|------------------|----------------|----------------|----------------|----------------|----------------|----------------|
 | Frame Angle A | Frame Angle B | Frame Angle C | Frame Angle D | Iris | Edge | Zoom | Intensity |
 | Frame Thrust A | Frame Thrust B | Frame Thrust C | Frame Thrust D | Frame Assembly Rot. | - | Pan | Tilt |
 | Red | Amber | Mint/Lime | Green | Blue | Cyan | Magenta | Yellow |
+
 
 They're grouped relatively sensibly (imho)
 - Top left has all the framing shutters and hinted blue
