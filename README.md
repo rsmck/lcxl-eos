@@ -37,6 +37,10 @@ They're grouped relatively sensibly (imho)
 
 The eight faders correspond to Faders 1-8 on Eos, the buttons below each fader act like the Fire and Stop/Back buttons, and therefore respect the configuration you've set for them in Fader Config on the console. 
 
+Fader buttons are only illuminated when there is something programmed on the corresponding fader. 
+
+It's not possible to determine the type of fader via OSC, but if you include 'Inhib' in the name then it will be shown red rather than green.
+
 #### Cue Stack
 
 The "Record" (Round Red Button) acts as STOP/BACK and the Play button acts as GO as you'd expect. The current Cue is shown in the LCD display (but it does lag a bit)
