@@ -246,7 +246,7 @@ input.on('message', (deltaTime, message) => {
   } else if (ch == 104 && val == 127) {
     // weird hidden button
     osc.send({
-        address: '/eos/key/last',
+        address: '/eos/key/select_last',
     }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
   } else if (ch == 103 && val == 127) {
     // prev
