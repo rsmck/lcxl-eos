@@ -21,6 +21,12 @@ const midi = require('midi');
 const oscjs = require("osc");
 const util = require ("util");
 
+// MIDI Interface
+let input = new midi.Input();
+let output = new midi.Output();
+let midiConnected = false;
+let midiReconnectInterval = 3000;
+
 // EOS
 const EOS_CONSOLE_IP = "127.0.0.1";
 const EOS_PROTO = 'tcp';
@@ -35,7 +41,6 @@ var bolReady = false;
 var bolDeskLocked = false;
 var intLastAct = 0;
 var strLastAct = '';
-var timFaderUpdate = false;
 var bolFadeFlash = 0;
 
 // Definitions 
@@ -78,6 +83,7 @@ ctl[104] = {'mode': 'key', 'act': 'select_last', 'col': 9};
 // Fader Colours
 faderTypes = [
   { 'match': /^S /, 'col_off': 10, 'col_on': 9, 'top_col': 9, 'factor': 1, 'unit': '%' }, 
+  { 'match': /^L[0-9]+  /, 'col_off': 23, 'col_on': 23, 'top_col': 121, 'factor': 1, 'unit': '%' }, 
   { 'match': /^IP /, 'col_off': 9, 'col_on': 9, 'top_col': 9, 'factor': 1, 'unit': '%' }, 
   { 'match': /^FP /, 'col_off': 123, 'col_on': 26, 'top_col': 9, 'factor': 1, 'unit': '%' },  // dk green
   { 'match': /^BP /, 'col_off': 67, 'col_on': 66, 'top_col': 9, 'factor': 1, 'unit': '%'},  // dk blue
@@ -94,108 +100,136 @@ for (var i = 0; i < fc.length; i++) {
   fc[i] = {'label': '', 'range': [0,100], 'factor': 1, 'unit': '%'};
 }
 
-// OSC Connection to EOS
-if (EOS_PROTO == 'tcp') {
-  var osc = new oscjs.TCPSocketPort({ localAddress: EOS_CONSOLE_IP, localPort: EOS_CONSOLE_PORT, metadata: true });
-  osc.open(EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-} else {
-  var osc = new oscjs.UDPPort({ localAddress: EOS_CONSOLE_IP, localPort: EOS_CONSOLE_PORT, metadata: true });
-  osc.open();
-}
+// Initiallise
+osc = connectEos();
+connectMIDI();
 
-// Set up a new input.
-const input = new midi.Input();
-const output = new midi.Output();
-input.ignoreTypes(false, false, false);
-
-var inputId = 0;
-var outputId = 0;
-
-// Count the available MIDI ports.
-const portCount = input.getPortCount();
-
-if (portCount === 0) {
-  console.log('No MIDI devices found.');
-  process.exit(1);
-}
-
-// Print available ports
-console.log('Available MIDI input ports:');
-for (let i = 0; i < portCount; i++) {
-  if (input.getPortName(i) == 'LCXL3 1 DAW Out' && inputId == 0) { 
-    inputId = i; 
-    console.log(`${i}: ${input.getPortName(i)} ** SELECTED **`);
+function connectEos() {
+  if (EOS_PROTO == 'tcp') {
+    var osc = new oscjs.TCPSocketPort({ localAddress: EOS_CONSOLE_IP, localPort: EOS_CONSOLE_PORT, metadata: true });
+    osc.open(EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
   } else {
-    console.log(`${i}: ${input.getPortName(i)}`);
+    var osc = new oscjs.UDPPort({ localAddress: EOS_CONSOLE_IP, localPort: EOS_CONSOLE_PORT, metadata: true });
+    osc.open();
   }
-}
-for (let i = 0; i < portCount; i++) {
-  if (output.getPortName(i) == 'LCXL3 1 DAW In' && outputId == 0) { 
-    outputId = i; 
-    console.log(`${i}: ${output.getPortName(i)} ** SELECTED **`);
-  } else {
-    console.log(`${i}: ${output.getPortName(i)}`);
+  if (osc) {
+    // Setup Eos Session + Faders
+    osc.on("message", oscHandler);
+    osc.send({ address: '/eos/fader/1/config/8' }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    osc.send({ address: '/eos/subscribe', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    osc.send({ address: '/eos/subscribe/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    osc.send({ address: '/eos/subscribe/out/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    osc.send({ address: '/eos/subscribe/wheel', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    osc.send({ address: '/eos/subscribe/param', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    return osc;
   }
+  return false;
 }
 
-if (outputId === 0 && inputId === 0) {
-  console.log('No LaunchControl XL device found.');
-  process.exit(1);
-}
+function connectMIDI() {
+  try {
+    // Set up a new input.
+    input.ignoreTypes(false, false, false);
 
-// Connect to LCXL
-input.openPort(inputId);
-output.openPort(outputId);
+    var inputId = 0;
+    var outputId = 0;
 
-// Setup Eos Session + Faders
-osc.send({ address: '/eos/fader/1/config/8' }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-osc.send({ address: '/eos/subscribe', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-osc.send({ address: '/eos/subscribe/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-osc.send({ address: '/eos/subscribe/out/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-osc.send({ address: '/eos/subscribe/wheel', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-osc.send({ address: '/eos/subscribe/param', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    // Count the available MIDI ports.
+    const portCount = input.getPortCount();
 
-// Configure the LCXL
-output.sendMessage([240,0,32,41,2,21,2,127,247]);
-// Enable Relative Mode on Encoders
-output.sendMessage([182,69,127]);
-output.sendMessage([182,72,127]);
-output.sendMessage([182,73,127]);
-output.sendMessage([182,71,127]);
+    if (portCount === 0) {
+      console.log('No MIDI devices found.');
+      process.exit(1);
+    }
 
-// disable all display autopops
-const controlTargets = [...Array(32)].map((_, i) => i + 0x05); // 0x05 to 0x24
-for (let target of controlTargets) {
-  output.sendMessage([240, 0, 32, 41, 2, 21, 4, target, 0x04, 247]);
+    // Print available ports
+    console.log('Available MIDI input ports:');
+    for (let i = 0; i < portCount; i++) {
+      if (input.getPortName(i) == 'LCXL3 1 DAW Out' && inputId == 0) { 
+        inputId = i; 
+        console.log(`${i}: ${input.getPortName(i)} ** SELECTED **`);
+      } else {
+        console.log(`${i}: ${input.getPortName(i)}`);
+      }
+    }
+    for (let i = 0; i < portCount; i++) {
+      if (output.getPortName(i) == 'LCXL3 1 DAW In' && outputId == 0) { 
+        outputId = i; 
+        console.log(`${i}: ${output.getPortName(i)} ** SELECTED **`);
+      } else {
+        console.log(`${i}: ${output.getPortName(i)}`);
+      }
+    }
+
+    if (outputId === 0 && inputId === 0) {
+      console.log('No LaunchControl XL device found.');
+      process.exit(1);
+    }
+
+    // Connect to LCXL
+    input.openPort(inputId);
+    output.openPort(outputId);
+
+    if (input) {
+      midiConnected = true;
+
+      // Configure the LCXL
+      MIDItx([240,0,32,41,2,21,2,127,247]);
+      // Enable Relative Mode on Encoders
+      MIDItx([182,69,127]);
+      MIDItx([182,72,127]);
+      MIDItx([182,73,127]);
+      MIDItx([182,71,127]);
+
+      // disable all display autopops
+      const controlTargets = [...Array(32)].map((_, i) => i + 0x05); // 0x05 to 0x24
+      for (let target of controlTargets) {
+        MIDItx([240, 0, 32, 41, 2, 21, 4, target, 0x04, 247]);
+      }
+
+      // Initial Colours
+      for (let control = 1; control < 164; control++) {
+        if (typeof ctl[control] == 'object' && ctl[control].col > 0) {
+          MIDItx([176,control,ctl[control].col]);
+        }
+      }
+
+      input.on('message', MIDIhandler);
+  
+      return true;
+    }
+  } catch (err) {
+    console.error('Error during MIDI connection:', err);
+    midiConnected = false;
+    return false;
+  }
 }
 
 function encoderPop(a,b,c) {
-  output.sendMessage([240, 0, 32, 41, 2, 21, 4, 54, 0x01, 247])
-  output.sendMessage([ 240, 0, 32, 41, 2, 21, 6, 54, 0, ...a.split('').map(c=>c.charCodeAt(0)), 247] );
-  output.sendMessage([ 240, 0, 32, 41, 2, 21, 6, 54, 1, ...b.split('').map(c=>c.charCodeAt(0)), 247] );
-  output.sendMessage([ 240, 0, 32, 41, 2, 21, 4, 54, 0x7F, 247 ]);
+  if (typeof a == 'undefined') a = '';
+  if (typeof b == 'undefined') b = '';
+  if (typeof c == 'undefined') c = '';
+  MIDItx([240, 0, 32, 41, 2, 21, 4, 54, 0x01, 247])
+  MIDItx([ 240, 0, 32, 41, 2, 21, 6, 54, 0, ...a.split('').map(c=>c.charCodeAt(0)), 247] );
+  MIDItx([ 240, 0, 32, 41, 2, 21, 6, 54, 1, ...b.split('').map(c=>c.charCodeAt(0)), 247] );
+  MIDItx([ 240, 0, 32, 41, 2, 21, 4, 54, 0x7F, 247 ]);
 }
 
 function displayMain(a,b,c) {
   if (typeof a == 'undefined') a = '';
   if (typeof b == 'undefined') b = '';
   if (typeof c == 'undefined') c = '';
-  output.sendMessage([240, 0, 32, 41, 2, 21, 4, 53, 0x02, 247])
-  output.sendMessage([ 240, 0, 32, 41, 2, 21, 6, 53, 0, ...a.split('').map(c=>c.charCodeAt(0)), 247] );
-  output.sendMessage([ 240, 0, 32, 41, 2, 21, 6, 53, 1, ...b.split('').map(c=>c.charCodeAt(0)), 247] );
-  output.sendMessage([ 240, 0, 32, 41, 2, 21, 6, 53, 2, ...c.split('').map(c=>c.charCodeAt(0)), 247] );
-  output.sendMessage([ 240, 0, 32, 41, 2, 21, 4, 53, 0x7F, 247 ]);
+  MIDItx([240, 0, 32, 41, 2, 21, 4, 53, 0x02, 247])
+  MIDItx([ 240, 0, 32, 41, 2, 21, 6, 53, 0, ...a.split('').map(c=>c.charCodeAt(0)), 247] );
+  MIDItx([ 240, 0, 32, 41, 2, 21, 6, 53, 1, ...b.split('').map(c=>c.charCodeAt(0)), 247] );
+  MIDItx([ 240, 0, 32, 41, 2, 21, 6, 53, 2, ...c.split('').map(c=>c.charCodeAt(0)), 247] );
+  MIDItx([ 240, 0, 32, 41, 2, 21, 4, 53, 0x7F, 247 ]);
 }
 
-// Initial Colours
-for (let control = 1; control < 164; control++) {
-  if (typeof ctl[control] == 'object' && ctl[control].col > 0) {
-    output.sendMessage([176,control,ctl[control].col]);
-  }
-}
 
 // Update Fader LEDs
 function updateFaders() {
+  console.log(fc);
   for (let i = 1; i < fc.length; i++) {
     topBtn = i+36;
     btmBtn = i+44;
@@ -220,21 +254,21 @@ function updateFaders() {
       if (faderDefinition.col_on === undefined) faderDefinition.col_on = faderDefinition.col_off;
 
       if (faderLevels[i] > 0) {
-          output.sendMessage([176,topBtn,faderDefinition.top_col_on]);
-          output.sendMessage([176,btmBtn,faderDefinition.col_on]);
+          MIDItx([176,topBtn,faderDefinition.top_col_on]);
+          MIDItx([176,btmBtn,faderDefinition.col_on]);
       } else {
-          output.sendMessage([176,topBtn,faderDefinition.top_col]);
-          output.sendMessage([176,btmBtn,faderDefinition.col_off]);
+          MIDItx([176,topBtn,faderDefinition.top_col]);
+          MIDItx([176,btmBtn,faderDefinition.col_off]);
       }
 
       if ((faderLevels[i] != faderLevelsLocal[i]) && bolFadeFlash == 1) {
-          if (fc[i].label == 'GM') output.sendMessage([176,topBtn,0]);
-          output.sendMessage([176,btmBtn,0]);
+          if (fc[i].label == 'GM') MIDItx([176,topBtn,0]);
+          MIDItx([176,btmBtn,0]);
       }
     } else {
       // undefined fader
-      output.sendMessage([176,topBtn,0]);
-      output.sendMessage([176,btmBtn,0]);
+      MIDItx([176,topBtn,0]);
+      MIDItx([176,btmBtn,0]);
     }
   }
 
@@ -246,7 +280,7 @@ function updateFaders() {
 }
 
 // Main Handler
-input.on('message', (deltaTime, message) => {
+function MIDIhandler(deltaTime,message) {
   const z = message[0];
   const ch = message[1];
   const val = message[2];
@@ -269,10 +303,7 @@ input.on('message', (deltaTime, message) => {
     dir = val-64;
     id = ch-64;
 
-    // shift for speedup
-    if (bolShiftPressed) { dir = dir*3; }
-
-    if (typeof ctl[id].act == 'array' || typeof ctl[id].act == 'object') {
+    if (typeof ctl[id].act == 'object') {
       // we're going to trigger more than one wheel on the console (lime/mint are the same!)
       for (let i = 0; i < ctl[id].act.length; i++) {
         strWheelMsg = '/eos/wheel/'+ctl[id].act[i];
@@ -321,7 +352,6 @@ input.on('message', (deltaTime, message) => {
     displayValue = ((fc[faderId].range[0]+faderMult*faderRange)*fc[faderId].factor).toFixed(2)+' '+fc[faderId].unit;
     encoderPop(fc[faderId].label, displayValue);
 
-    faderLevelsLocal[faderId] = (val/127).toFixed(2);
     faderLevels[faderId] = (val/127).toFixed(2);
 
     osc.send({
@@ -362,12 +392,12 @@ input.on('message', (deltaTime, message) => {
   } else {
     if (DEBUG) console.log(`Received UNKNOWN MIDI message: [${message.join(', ')}] (deltaTime: ${deltaTime})`);
   }
-});
+}
 
 // handle inbound messages and display them
 
-osc.on("message", function (oscMsg) {
-  console.log(oscMsg);
+
+function oscHandler(oscMsg) {
   if (oscMsg.address == '/eos/out/active/cue/text') {
     const parts = oscMsg.args[0].value.split(' ');
     if (oscMsg.args[0].value != strLastCueState) {
@@ -403,7 +433,6 @@ osc.on("message", function (oscMsg) {
     const min = oscMsg.args[0].value;
     const max = oscMsg.args[1].value;
     fc[faderId].range = [min,max];
-    console.log(oscMsg);
   } else if (oscMsg.address == '/eos/out/event/locked') {
     const parts = strLastCueState.split(' '); 
     if (oscMsg.args[0].value == 1) {
@@ -414,8 +443,42 @@ osc.on("message", function (oscMsg) {
       displayMain('LXQ: '+parts[0], parts[1], parts[2]);
     }
   }
-});
+}
+
+function MIDIcheck() {
+  if (!midiConnected) {
+    console.log('Attempting MIDI reconnection...');
+    try {
+      input.closePort(); 
+      output.closePort();
+    } catch (e) { /* Ignore */ }
+
+    try {
+      input = new midi.Input();
+      output = new midi.Output();
+    } catch (e) {
+      console.error('Failed to create new MIDI session:', e);
+      return;
+    }
+
+    const success = connectMIDI();
+    if (!success) {
+      midiConnected = false;
+    }
+  }
+}
+
+function MIDItx(message) {
+  try {
+    if (midiConnected) output.sendMessage(message);
+  } catch (e) {
+    console.error('MIDI error:', e);
+    midiConnected = false;
+  }
+}
 
 setTimeout(function() { bolReady = true; }, 2000);
 setInterval(updateFaders, 400);
+setInterval(MIDIcheck, midiReconnectInterval);
+
 console.log('Running');
