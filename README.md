@@ -39,15 +39,36 @@ The eight faders correspond to Faders 1-8 on Eos, the buttons below each fader a
 
 Fader buttons are only illuminated when there is something programmed on the corresponding fader. 
 
-It's not possible to determine the type of fader via OSC, but if you include 'Inhib' in the name then it will be shown red rather than green.
+Some faders are colour-coded;
+- Submaster Amber
+- Cue Lists will show Red/Green buttons
+- Focus Palettes Dark Green
+- Beam Palettes Dark Blue
+- Presets Teal
+- Manual Time Faders Blue (also, will flash optionally with time selected - see limitations below)
+- Global FX Purple
+- Grand Master Red (Both buttons shown red, as top button is not configurable)
+ 
+It's not possible to determine an inhibited sub by OSC, but if you include 'Inhib' in the name then it will be shown red rather than green in the lower button.
+
+As of v0.3 Manual Time faders will be shown blue and can optionally flash to indicate the selected time subject to the following limitations;
+- The time must be set on the LaunchControl, if you set it elsewhere it wont update (yet)
+- Only one manual time fader is supported
+- If you disconnect and reconnect the LaunchControl it will stop flashing
+
+As of v0.2 All Faders will flash if the value on the desk has changed from what is set on the wing. By default a flag called `FADER_MANTIME_FLASH` is enabled which requires you to move the fader up/down to 'catch' the existing value before it will adjust to prevent any sudden changes on stage, this is in keeping with many controllers. The LCD will indicate the current set value and the direction the fader needs to be moved (via `^` and `v` indications) to reach the captured value
 
 #### Cue Stack
 
 The "Record" (Round Red Button) acts as STOP/BACK and the Play button acts as GO as you'd expect. The current Cue is shown in the LCD display (but it does lag a bit)
 
+When a cue stack is on a fader, the two buttons beneath the fader will show Red (STOP/BACK) and Green (GO) as appropriate
+
 #### Other Features
 
 The Track Prev/Next buttons act as LAST/NEXT
+
+If the console is locked, a CONSOLE LOCKED message is displayed on the LaunchControl also and all functions are disabled
 
 ### Where can I get one? 
  
