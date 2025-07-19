@@ -31,8 +31,11 @@ let midiReconnectInterval = 3000;
 const EOS_CONSOLE_IP = "127.0.0.1";
 const EOS_PROTO = 'tcp';
 const EOS_CONSOLE_PORT = 5604;
+
+// config
 const DEBUG = false;
 const FADER_MISMATCH_CATCH = true;
+const FADER_MANTIME_FLASH = true; 
 
 // State
 var strLastCueState = '';
@@ -42,6 +45,9 @@ var bolDeskLocked = false;
 var intLastAct = 0;
 var strLastAct = '';
 var bolFadeFlash = 0;
+var manTimeFlashInterval = null;
+var manTime = 0;
+var manTimeFlashState = 0;
 
 // Definitions 
 var faderLevels = new Array(9);
@@ -229,7 +235,7 @@ function displayMain(a,b,c) {
 
 // Update Fader LEDs
 function updateFaders() {
-  console.log(fc);
+  bolManTimeSeen = false;
   for (let i = 1; i < fc.length; i++) {
     topBtn = i+36;
     btmBtn = i+44;
@@ -253,6 +259,11 @@ function updateFaders() {
       if (faderDefinition.top_col_on === undefined) faderDefinition.top_col_on = faderDefinition.top_col;
       if (faderDefinition.col_on === undefined) faderDefinition.col_on = faderDefinition.col_off;
 
+      if (FADER_MANTIME_FLASH && fc[i].label == 'Man Time' && manTimeFlashInterval != null) {
+        bolManTimeSeen = true;
+        continue;
+      }
+
       if (faderLevels[i] > 0) {
           MIDItx([176,topBtn,faderDefinition.top_col_on]);
           MIDItx([176,btmBtn,faderDefinition.col_on]);
@@ -270,6 +281,11 @@ function updateFaders() {
       MIDItx([176,topBtn,0]);
       MIDItx([176,btmBtn,0]);
     }
+  }
+
+  if (FADER_MANTIME_FLASH && manTimeFlashInterval && !bolManTimeSeen) {
+    clearInterval(manTimeFlashInterval);
+    manTimeFlashInterval = null;
   }
 
   if (bolFadeFlash == 1) {
@@ -347,6 +363,25 @@ function MIDIhandler(deltaTime,message) {
         }
         return;
       }
+    }
+
+    // manual time fader? 
+    if (FADER_MANTIME_FLASH && fc[faderId].label == 'Man Time') {
+        intTimeMsec = fc[faderId].range[0]+faderMult*faderRange;
+        if (intTimeMsec == 0) {
+          // not flashing
+          clearInterval(manTimeFlashInterval);
+          manTimeFlashInterval = null;
+        } else {
+          clearInterval(manTimeFlashInterval);
+          manTimeFlashInterval = null;
+          manTimeFlashInterval = setInterval(() => {
+              MIDItx([176,ch+32,0]);
+              setTimeout(() => {
+                MIDItx([176,ch+32,67]);
+              }, 500)
+          }, intTimeMsec );
+        }
     }
 
     displayValue = ((fc[faderId].range[0]+faderMult*faderRange)*fc[faderId].factor).toFixed(2)+' '+fc[faderId].unit;
