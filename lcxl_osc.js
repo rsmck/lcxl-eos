@@ -25,8 +25,8 @@ const util = require ("util");
 const EOS_CONSOLE_IP = "127.0.0.1";
 const EOS_PROTO = 'tcp';
 const EOS_CONSOLE_PORT = 5604;
-const FADER_MISMATCH_CATCH = true;
 const DEBUG = false;
+const FADER_MISMATCH_CATCH = true;
 
 // State
 var strLastCueState = '';
@@ -34,104 +34,72 @@ var bolShiftPressed = false;
 var bolReady = false;
 var bolDeskLocked = false;
 var intLastAct = 0;
+var strLastAct = '';
 var timFaderUpdate = false;
 var bolFadeFlash = 0;
 
 // Definitions 
-var wheelNames = new Array(128);
-var controlColours = new Array(128);
-var faderNames = new Array(9);
 var faderLevels = new Array(9);
 var faderLevelsLocal = new Array(9);
+var ctl = new Array(128);
+var fc = new Array(9);
 
-// Default Fader Names
-faderNames[1] = 'Fader 1';
-faderNames[2] = 'Fader 2';
-faderNames[3] = 'Fader 3';
-faderNames[4] = 'Fader 4';
-faderNames[5] = 'Fader 5';
-faderNames[6] = 'Fader 6';
-faderNames[7] = 'Fader 7';
-faderNames[8] = 'Fader 8';
+// New Global Config
+ctl[13] = {'mode': 'encoder', 'act': 'frame_angle_a', 'col': 45, 'unit': 'º'};
+ctl[14] = {'mode': 'encoder', 'act': 'frame_angle_b', 'col': 45, 'unit': 'º'};
+ctl[15] = {'mode': 'encoder', 'act': 'frame_angle_c', 'col': 45, 'unit': 'º'};
+ctl[16] = {'mode': 'encoder', 'act': 'frame_angle_d', 'col': 45, 'unit': 'º'};
+ctl[17] = {'mode': 'encoder', 'act': 'iris', 'col': 53};
+ctl[18] = {'mode': 'encoder', 'act': 'edge', 'col': 53};
+ctl[19] = {'mode': 'encoder', 'act': 'zoom', 'col': 53, 'unit': 'º'};
+ctl[20] = {'mode': 'encoder', 'act': 'intens', 'col': 3};
+ctl[21] = {'mode': 'encoder', 'act': 'frame_thrust_a', 'col': 41};
+ctl[22] = {'mode': 'encoder', 'act': 'frame_thrust_b', 'col': 41};
+ctl[23] = {'mode': 'encoder', 'act': 'frame_thrust_c', 'col': 41};
+ctl[24] = {'mode': 'encoder', 'act': 'frame_thrust_d', 'col': 41};
+ctl[25] = {'mode': 'encoder', 'act': 'frame_assembly', 'col': 45, 'unit': 'º'};
+ctl[26] = {'mode': 'inop'};
+ctl[27] = {'mode': 'encoder', 'act': 'pan', 'col': 21, 'unit': 'º'};
+ctl[28] = {'mode': 'encoder', 'act': 'tilt', 'col': 21, 'unit': 'º'};
+ctl[29] = {'mode': 'encoder', 'act': 'red', 'col': 5};
+ctl[30] = {'mode': 'encoder', 'act': 'amber', 'col': 9};
+ctl[31] = {'mode': 'encoder', 'act': ['mint','lime'], 'col': 17};
+ctl[32] = {'mode': 'encoder', 'act': 'green', 'col': 22};
+ctl[33] = {'mode': 'encoder', 'act': 'blue', 'col': 67};
+ctl[34] = {'mode': 'encoder', 'act': 'cyan', 'col': 37};
+ctl[35] = {'mode': 'encoder', 'act': 'magenta', 'col': 53};
+ctl[36] = {'mode': 'encoder', 'act': 'yellow', 'col': 13};
+ctl[116] = {'mode': 'key', 'act': 'go_0', 'col': 23};
+ctl[118] = {'mode': 'key', 'act': 'stop', 'col': 121};
+ctl[103] = {'mode': 'key', 'act': 'prev', 'col': 9};
+ctl[102] = {'mode': 'key', 'act': 'next', 'col': 9};
+ctl[104] = {'mode': 'key', 'act': 'select_last', 'col': 9};
 
-// What do the encoders do
-wheelNames[13] = 'frame_angle_a';
-wheelNames[14] = 'frame_angle_b';
-wheelNames[15] = 'frame_angle_c';
-wheelNames[16] = 'frame_angle_d';
-wheelNames[17] = 'iris';
-wheelNames[18] = 'edge';
-wheelNames[19] = 'zoom';
-wheelNames[20] = 'level';
+// Fader Colours
+faderTypes = [
+  { 'match': /^S /, 'col_off': 10, 'col_on': 9, 'top_col': 9, 'factor': 1, 'unit': '%' }, 
+  { 'match': /^IP /, 'col_off': 9, 'col_on': 9, 'top_col': 9, 'factor': 1, 'unit': '%' }, 
+  { 'match': /^FP /, 'col_off': 123, 'col_on': 26, 'top_col': 9, 'factor': 1, 'unit': '%' },  // dk green
+  { 'match': /^BP /, 'col_off': 67, 'col_on': 66, 'top_col': 9, 'factor': 1, 'unit': '%'},  // dk blue
+  { 'match': /^Pr /, 'col_off': 68, 'col_on': 68, 'top_col': 9, 'factor': 1, 'unit': '%' },  //  teal
+  { 'match': /Inhib/, 'col_off': 121, 'col_on': 5, 'top_col': 9, 'factor': 1, 'unit': '%' }, 
+  { 'match': 'Man Time', 'col_off': 67, 'col_on': 45, 'top_col': 9, 'factor': 0.001, 'unit': 's' }, 
+  { 'match': 'Cue RM', 'col_off': 67, 'col_on': 45, 'top_col': 9, 'factor': 1, 'unit': '' }, 
+  { 'match': 'Global FX', 'col_off': 51, 'col_on': 69, 'top_col': 9, 'factor': 1, 'unit': '' }, // purple
+  { 'match': 'GM', 'col_off': 121, 'col_on': 5, 'top_col': 121, 'top_col_on': 5, 'factor': 1, 'unit': '%' }, 
+]
 
-wheelNames[21] = 'frame_thrust_a';
-wheelNames[22] = 'frame_thrust_b';
-wheelNames[23] = 'frame_thrust_c';
-wheelNames[24] = 'frame_thrust_d';
-wheelNames[25] = 'frame_assembly';
-wheelNames[26] = '';
-wheelNames[27] = 'pan';
-wheelNames[28] = 'tilt';
-
-wheelNames[29] = 'red';
-wheelNames[30] = 'amber' ;
-wheelNames[31] = Array('mint','lime');
-wheelNames[32] = 'green';
-wheelNames[33] = 'blue';
-wheelNames[34] = 'cyan';
-wheelNames[35] = 'magenta';
-wheelNames[36] = 'yellow';
-
-// initial colour mapping (fixme: use RGB later!)
-controlColours[13] = 45; // blue
-controlColours[14] = 45;
-controlColours[15] = 45;
-controlColours[16] = 45;
-controlColours[17] = 53; // purple
-controlColours[18] = 53;
-controlColours[19] = 53;
-controlColours[20] = 3; // white
-
-controlColours[21] = 41; // light blue
-controlColours[22] = 41; 
-controlColours[23] = 41; 
-controlColours[24] = 41; 
-controlColours[25] = 45;
-controlColours[26] = '';
-controlColours[27] = 21; // green
-controlColours[28] = 21;
-
-controlColours[29] = 5; // red
-controlColours[30] = 9; // amber
-controlColours[31] = 17; // lime
-controlColours[32] = 22; // green
-controlColours[33] = 67; // blue
-controlColours[34] = 37; // cyan
-controlColours[35] = 53; // magents
-controlColours[36] = 13; // yellow
-
-// last next
-controlColours[103] = 9;
-controlColours[102] = 9;
-
-// back and go
-controlColours[118] = 5;
-controlColours[116] = 23;
+// Default Fader Config
+for (var i = 0; i < fc.length; i++) { 
+  fc[i] = {'label': '', 'range': [0,100], 'factor': 1, 'unit': '%'};
+}
 
 // OSC Connection to EOS
 if (EOS_PROTO == 'tcp') {
-  var osc = new oscjs.TCPSocketPort({
-      localAddress: EOS_CONSOLE_IP,
-      localPort: EOS_CONSOLE_PORT,
-      metadata: true
-  });
+  var osc = new oscjs.TCPSocketPort({ localAddress: EOS_CONSOLE_IP, localPort: EOS_CONSOLE_PORT, metadata: true });
   osc.open(EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
 } else {
-  var osc = new oscjs.UDPPort({
-      localAddress: EOS_CONSOLE_IP,
-      localPort: EOS_CONSOLE_PORT,
-      metadata: true
-  });
+  var osc = new oscjs.UDPPort({ localAddress: EOS_CONSOLE_IP, localPort: EOS_CONSOLE_PORT, metadata: true });
   osc.open();
 }
 
@@ -139,6 +107,7 @@ if (EOS_PROTO == 'tcp') {
 const input = new midi.Input();
 const output = new midi.Output();
 input.ignoreTypes(false, false, false);
+
 var inputId = 0;
 var outputId = 0;
 
@@ -181,10 +150,10 @@ output.openPort(outputId);
 // Setup Eos Session + Faders
 osc.send({ address: '/eos/fader/1/config/8' }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
 osc.send({ address: '/eos/subscribe', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-osc.send({ address: '/eos/subscribe/wheel', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-osc.send({ address: '/eos/subscribe/param', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
 osc.send({ address: '/eos/subscribe/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
 osc.send({ address: '/eos/subscribe/out/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+osc.send({ address: '/eos/subscribe/wheel', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+osc.send({ address: '/eos/subscribe/param', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
 
 // Configure the LCXL
 output.sendMessage([240,0,32,41,2,21,2,127,247]);
@@ -220,62 +189,61 @@ function displayMain(a,b,c) {
 
 // Initial Colours
 for (let control = 1; control < 164; control++) {
-  if (controlColours[control] > 0) {
-    output.sendMessage([176,control,controlColours[control]]);
+  if (typeof ctl[control] == 'object' && ctl[control].col > 0) {
+    output.sendMessage([176,control,ctl[control].col]);
   }
 }
 
+// Update Fader LEDs
 function updateFaders() {
-  for (let i = 1; i < faderNames.length; i++) {
+  for (let i = 1; i < fc.length; i++) {
     topBtn = i+36;
     btmBtn = i+44;
-    if (faderNames[i] != '') {
-      // this fader has something on it
-      output.sendMessage([176,topBtn,9]);
-      if (faderNames[i] == 'GM') {
-        if (faderLevels[i] > 0) {
-          output.sendMessage([176,topBtn,5]);
-          output.sendMessage([176,btmBtn,5]);
-        } else {
-          output.sendMessage([176,topBtn,121]);
-          output.sendMessage([176,btmBtn,121]);
-        }
-      } else if (faderNames[i].toLowerCase().includes('inhib')) {
-        if (faderLevels[i] > 0) {
-          output.sendMessage([176,btmBtn,5]);
-        } else {
-          output.sendMessage([176,btmBtn,121]);
-        }
-      } else if (faderNames[i] == 'Man Time') {
-        if (faderLevels[i] > 0) {
-          output.sendMessage([176,btmBtn,45]);
-        } else {
-          output.sendMessage([176,btmBtn,67]);
-        }
-      } else {
-        if (faderLevels[i] > 0) {
-          output.sendMessage([176,btmBtn,22]);
-        } else {
-          output.sendMessage([176,btmBtn,123]);
+
+    var faderDefinition = {col_off: 0, col_on: 0, top_col: 0, top_col_on: 0};
+
+    if (fc[i].label != '') {
+      for (const item of faderTypes) {
+        const isMatch = (item.match instanceof RegExp)
+          ? item.match.test(fc[i].label)
+          : fc[i].label === item.match;
+
+        if (isMatch) {
+          faderDefinition = item;
         }
       }
-      if ((faderLevels[i] != faderLevelsLocal[i])) {
-        if (bolFadeFlash == 1) {
+
+      fc[i].unit = faderDefinition.unit;
+      fc[i].factor = faderDefinition.factor;
+
+      if (faderDefinition.top_col_on === undefined) faderDefinition.top_col_on = faderDefinition.top_col;
+      if (faderDefinition.col_on === undefined) faderDefinition.col_on = faderDefinition.col_off;
+
+      if (faderLevels[i] > 0) {
+          output.sendMessage([176,topBtn,faderDefinition.top_col_on]);
+          output.sendMessage([176,btmBtn,faderDefinition.col_on]);
+      } else {
+          output.sendMessage([176,topBtn,faderDefinition.top_col]);
+          output.sendMessage([176,btmBtn,faderDefinition.col_off]);
+      }
+
+      if ((faderLevels[i] != faderLevelsLocal[i]) && bolFadeFlash == 1) {
+          if (fc[i].label == 'GM') output.sendMessage([176,topBtn,0]);
           output.sendMessage([176,btmBtn,0]);
-        }
       }
     } else {
+      // undefined fader
       output.sendMessage([176,topBtn,0]);
       output.sendMessage([176,btmBtn,0]);
     }
   }
+
   if (bolFadeFlash == 1) {
     bolFadeFlash = 0;
   } else {
     bolFadeFlash = 1;
   }
 }
-
 
 // Main Handler
 input.on('message', (deltaTime, message) => {
@@ -284,7 +252,6 @@ input.on('message', (deltaTime, message) => {
   const val = message[2];
   const now = Date.now();
 
-  // Faders
   if (z == 190) {
     // touch event, discard this for now
   } else if (bolDeskLocked) {
@@ -297,63 +264,75 @@ input.on('message', (deltaTime, message) => {
     } else {
       bolShiftPressed = false;
     }
-  } else if (ch == 104 && val == 127) {
-    // weird hidden button
-    osc.send({
-        address: '/eos/key/last',
-    }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-  } else if (ch == 103 && val == 127) {
-    // prev
-    osc.send({
-        address: '/eos/key/last',
-    }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-  } else if (ch == 102 && val == 127) {
-    // next
-    osc.send({
-        address: '/eos/key/next',
-    }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-  } else if (ch == 116 && val == 127) {
-    // go 
-    osc.send({
-        address: '/eos/key/go_0',
-    }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-  } else if (ch == 118 && val == 127) {
-    // stop back 
-    osc.send({
-        address: '/eos/key/stop',
-    }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+  } if (z == 191 && (ch >= 77 && ch <= 100)) {
+    // wheel 
+    dir = val-64;
+    id = ch-64;
+
+    // shift for speedup
+    if (bolShiftPressed) { dir = dir*3; }
+
+    if (typeof ctl[id].act == 'array' || typeof ctl[id].act == 'object') {
+      // we're going to trigger more than one wheel on the console (lime/mint are the same!)
+      for (let i = 0; i < ctl[id].act.length; i++) {
+        strWheelMsg = '/eos/wheel/'+ctl[id].act[i];
+        osc.send({
+            address: strWheelMsg,
+            args: [{type: "f", value: dir}]
+        }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+      }
+      strLastAct = ctl[id].act.join('|').replace(/[^0-9a-z\|]/gi, '');
+    } else if (typeof ctl[id].act == 'string') {
+      strWheelMsg = '/eos/wheel/'+ctl[id].act;
+      strLastAct = ctl[id].act.replace(/[^0-9a-z]/gi, '');
+      osc.send({
+          address: strWheelMsg,
+          args: [{type: "f", value: dir}]
+      }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    } else {
+      console.log(typeof ctl[id].act);
+    }
+    intLastAct = now;
   } else if (z == 191 && (ch >= 5 && ch <= 12)) {
+    // fader
+
     const faderId = ch-4;
-    if (faderNames[faderId] == '') return;
+    const faderMult = val/127;
+    const faderRange = fc[faderId].range[1]-fc[faderId].range[0];
+
+    if (fc[faderId].label == '') return;
 
     const strFaderMsg = '/eos/fader/1/'+faderId;
     faderLevelsLocal[faderId] = (val/127).toFixed(2);
 
     if (FADER_MISMATCH_CATCH && now > intLastAct+400 && !bolShiftPressed) {
       if (Math.abs(faderLevelsLocal[faderId]-faderLevels[faderId]) > 0.03) {
+        // display value 
+        var displayValueLocked = (faderLevels[faderId]*fc[faderId].range[1]*fc[faderId].factor).toFixed(2)+' '+fc[faderId].unit;
         if (faderLevelsLocal[faderId] > faderLevels[faderId]) {
-          encoderPop(faderNames[faderId], 'v  ( '+(faderLevels[faderId]*100).toFixed(2)+'% )  v');
+          encoderPop(fc[faderId].label, 'v  ( '+displayValueLocked+' )  v');
         } else {
-          encoderPop(faderNames[faderId], '^  ( '+(faderLevels[faderId]*100).toFixed(2)+'% )  ^');
+          encoderPop(fc[faderId].label, '^  ( '+displayValueLocked+' )  ^');
         }
         return;
       }
     }
 
-    encoderPop(faderNames[faderId], (val/127*100).toFixed(2)+'%');
+    displayValue = ((fc[faderId].range[0]+faderMult*faderRange)*fc[faderId].factor).toFixed(2)+' '+fc[faderId].unit;
+    encoderPop(fc[faderId].label, displayValue);
 
     faderLevelsLocal[faderId] = (val/127).toFixed(2);
-    faderLevels[(ch-4)] = (val/127).toFixed(2);
-
-    intLastAct = Date.now();
+    faderLevels[faderId] = (val/127).toFixed(2);
 
     osc.send({
         address: strFaderMsg,
         args: [{type: "f", value: val/127}]
     }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    intLastAct = now;
   } else if (ch >= 37 && ch <= 52) {
-    // buttons
+    // Fader Buttons
     var strFaderMsg = '';
+
     var act = 0;
     if (val > 1) { act = 1; }
 
@@ -367,38 +346,28 @@ input.on('message', (deltaTime, message) => {
         address: strFaderMsg,
         args: [{type: "f", value: act}]
     }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-  } else if (ch >= 77 && ch <= 100) {
-    // this is a wheel (64 is the midpoint)
-    dir = val-64;
-
-    // shift for speedup
-    if (bolShiftPressed) { dir = dir*3; }
-
-    if (typeof wheelNames[ch-64] == 'array' || typeof wheelNames[ch-64] == 'object') {
-      // we're going to trigger more than one wheel on the console (lime/mint are the same!)
-      for (let i = 0; i < wheelNames[ch-64].length; i++) {
-        strWheelMsg = '/eos/wheel/'+wheelNames[ch-64][i];
-        osc.send({
-            address: strWheelMsg,
-            args: [{type: "f", value: dir}]
-        }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-      }
-    } else {
-      strWheelMsg = '/eos/wheel/'+wheelNames[ch-64];
-      osc.send({
-          address: strWheelMsg,
-          args: [{type: "f", value: dir}]
-      }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+  } else if (typeof ctl[ch] == 'object') {
+    // we have a definition for this 
+    switch (ctl[ch].mode) {
+      case 'key':
+        if (val == 127) {
+          osc.send({
+              address: '/eos/key/'+ctl[ch].act,
+          }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+        }
+        break;
+      default:
+        break;
     }
   } else {
     if (DEBUG) console.log(`Received UNKNOWN MIDI message: [${message.join(', ')}] (deltaTime: ${deltaTime})`);
   }
-
-  if (DEBUG) {console.log(`Received MIDI message: [${message.join(', ')}] (deltaTime: ${deltaTime})`);}
 });
 
 // handle inbound messages and display them
+
 osc.on("message", function (oscMsg) {
+  console.log(oscMsg);
   if (oscMsg.address == '/eos/out/active/cue/text') {
     const parts = oscMsg.args[0].value.split(' ');
     if (oscMsg.args[0].value != strLastCueState) {
@@ -411,6 +380,10 @@ osc.on("message", function (oscMsg) {
     const parts = oscMsg.args[0].value.match(/(.*)\[/);
     const label = parts[1].trim();
     const value = oscMsg.args[2].value.toFixed(2)+'';
+    // filter out messages that aren't for the value we're actively changing
+    if (!label.replace(/[^a-z]/gi, '').toLowerCase().trim().match(strLastAct)) {
+      return;
+    }
     encoderPop(label,value,'');
   } else if (bolReady && oscMsg.address.match(/\/eos\/fader\/1/i)) {
     var now = Date.now();
@@ -423,7 +396,14 @@ osc.on("message", function (oscMsg) {
     const parts = oscMsg.address.match(/\/eos\/out\/fader\/1\/([0-9])/);
     const faderId = parts[1];
     const value = oscMsg.args[0].value;
-    faderNames[faderId] = value;
+    fc[faderId].label = value;
+  } else if (oscMsg.address.match(/\/eos\/out\/fader\/range\/1\/([0-9])/i)) {
+    const parts = oscMsg.address.match(/\/eos\/out\/fader\/range\/1\/([0-9])/);
+    const faderId = parts[1];
+    const min = oscMsg.args[0].value;
+    const max = oscMsg.args[1].value;
+    fc[faderId].range = [min,max];
+    console.log(oscMsg);
   } else if (oscMsg.address == '/eos/out/event/locked') {
     const parts = strLastCueState.split(' '); 
     if (oscMsg.args[0].value == 1) {
