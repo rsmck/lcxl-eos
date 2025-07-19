@@ -44,7 +44,7 @@ var faderNames = new Array(9);
 var faderLevels = new Array(9);
 var faderLevelsLocal = new Array(9);
 
-// Fader Names
+// Default Fader Names
 faderNames[1] = 'Fader 1';
 faderNames[2] = 'Fader 2';
 faderNames[3] = 'Fader 3';
@@ -231,12 +231,34 @@ function updateFaders() {
     btmBtn = i+44;
     if (faderNames[i] != '') {
       // this fader has something on it
-      if (faderNames[i].toLowerCase().includes('inhib')) {
-        output.sendMessage([176,btmBtn,5]);
-      } else {
-        output.sendMessage([176,btmBtn,22]);
-      }
       output.sendMessage([176,topBtn,9]);
+      if (faderNames[i] == 'GM') {
+        if (faderLevels[i] > 0) {
+          output.sendMessage([176,topBtn,5]);
+          output.sendMessage([176,btmBtn,5]);
+        } else {
+          output.sendMessage([176,topBtn,121]);
+          output.sendMessage([176,btmBtn,121]);
+        }
+      } else if (faderNames[i].toLowerCase().includes('inhib')) {
+        if (faderLevels[i] > 0) {
+          output.sendMessage([176,btmBtn,5]);
+        } else {
+          output.sendMessage([176,btmBtn,121]);
+        }
+      } else if (faderNames[i] == 'Man Time') {
+        if (faderLevels[i] > 0) {
+          output.sendMessage([176,btmBtn,45]);
+        } else {
+          output.sendMessage([176,btmBtn,67]);
+        }
+      } else {
+        if (faderLevels[i] > 0) {
+          output.sendMessage([176,btmBtn,22]);
+        } else {
+          output.sendMessage([176,btmBtn,123]);
+        }
+      }
       if ((faderLevels[i] != faderLevelsLocal[i])) {
         if (bolFadeFlash == 1) {
           output.sendMessage([176,btmBtn,0]);
@@ -253,6 +275,7 @@ function updateFaders() {
     bolFadeFlash = 1;
   }
 }
+
 
 // Main Handler
 input.on('message', (deltaTime, message) => {
@@ -309,9 +332,9 @@ input.on('message', (deltaTime, message) => {
     if (FADER_MISMATCH_CATCH && now > intLastAct+400 && !bolShiftPressed) {
       if (Math.abs(faderLevelsLocal[faderId]-faderLevels[faderId]) > 0.03) {
         if (faderLevelsLocal[faderId] > faderLevels[faderId]) {
-          encoderPop(faderNames[faderId], 'vv ( '+(faderLevels[faderId]*100).toFixed(2)+'% ) vv');
+          encoderPop(faderNames[faderId], 'v  ( '+(faderLevels[faderId]*100).toFixed(2)+'% )  v');
         } else {
-          encoderPop(faderNames[faderId], '^^ ( '+(faderLevels[faderId]*100).toFixed(2)+'% ) ^^');
+          encoderPop(faderNames[faderId], '^  ( '+(faderLevels[faderId]*100).toFixed(2)+'% )  ^');
         }
         return;
       }
@@ -397,7 +420,6 @@ osc.on("message", function (oscMsg) {
     const value = oscMsg.args[0].value.toFixed(2);
     faderLevels[faderId] = value;
   } else if (oscMsg.address.match(/\/eos\/out\/fader\/1\/([0-9])\/name/i)) {
-    console.log('fader name');
     const parts = oscMsg.address.match(/\/eos\/out\/fader\/1\/([0-9])/);
     const faderId = parts[1];
     const value = oscMsg.args[0].value;
