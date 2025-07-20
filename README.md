@@ -33,6 +33,8 @@ They're grouped relatively sensibly (imho)
 - Iris/Edge/Zoom are hinted magenta
 - Intensity is White
 
+As of v0.4 you can enable `DYNAMIC_ENCODERS` and only the encoders valid for the selected fixtures will be illuminated 
+
 #### Faders
 
 The eight faders correspond to Faders 1-8 on Eos, the buttons below each fader act like the Fire and Stop/Back buttons, and therefore respect the configuration you've set for them in Fader Config on the console. 
