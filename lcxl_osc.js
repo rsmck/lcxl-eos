@@ -212,9 +212,13 @@ function connectMIDI() {
       }
 
       // Initial Colours
-      for (let control = 1; control < 164; control++) {
+      for (let control = 1; control < 170; control++) {
         if (typeof ctl[control] == 'object' && ctl[control].col > 0) {
-          MIDItx([176,control,ctl[control].col]);
+          if (ENCODER_DYNAMIC && ctl[control].type == 'encoder') { 
+              /// don't set this for now
+          } else {
+             MIDItx([176, control, ctl[control].col]);
+          }
         }
       }
 
@@ -482,7 +486,6 @@ function oscHandler(oscMsg) {
 
     if (ENCODER_DYNAMIC) {
       if (oscMsg.args.length == 0) {
-         console.log('No '+attrib);
          // turn it off
          MIDItx([176,encId,0]);
          return;
