@@ -36,6 +36,7 @@ const EOS_CONSOLE_PORT = 5604;
 const DEBUG = false;
 const FADER_MISMATCH_CATCH = true;
 const FADER_MANTIME_FLASH = true; 
+const ENCODER_DYNAMIC = true;
 
 // State
 var strLastCueState = '';
@@ -86,6 +87,7 @@ ctl[103] = {'mode': 'key', 'act': 'prev', 'col': 9};
 ctl[102] = {'mode': 'key', 'act': 'next', 'col': 9};
 ctl[104] = {'mode': 'key', 'act': 'select_last', 'col': 9};
 
+
 // Fader Colours
 faderTypes = [
   { 'match': /^S /, 'col_off': 10, 'col_on': 9, 'top_col': 9, 'factor': 1, 'unit': '%' }, 
@@ -106,6 +108,20 @@ for (var i = 0; i < fc.length; i++) {
   fc[i] = {'label': '', 'range': [0,100], 'factor': 1, 'unit': '%'};
 }
 
+const encMap = ctl.reduce((map, item, index) => {
+  if (item && item.act) {
+    if (Array.isArray(item.act)) {
+      item.act.forEach(act => {
+        map[act] = index;
+      });
+    } else {
+      map[item.act] = index;
+    }
+  }
+  return map;
+}, {});
+
+
 // Initiallise
 osc = connectEos();
 connectMIDI();
@@ -122,11 +138,13 @@ function connectEos() {
     // Setup Eos Session + Faders
     osc.on("message", oscHandler);
     osc.send({ address: '/eos/fader/1/config/8' }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-    osc.send({ address: '/eos/subscribe', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
     osc.send({ address: '/eos/subscribe/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-    osc.send({ address: '/eos/subscribe/out/fader', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
     osc.send({ address: '/eos/subscribe/wheel', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
-    osc.send({ address: '/eos/subscribe/param', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    // FIXME: populate this from ctl 
+    // NB: it seems to hit a limit if you put all these in one line.
+    osc.send({ address: '/eos/subscribe/param/intens/pan/tilt/iris/edge/zoom', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    osc.send({ address: '/eos/subscribe/param/red/amber/mint/lime/green/blue/cyan/magenta/yellow', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
+    osc.send({ address: '/eos/subscribe/param/frame_angle_a/frame_angle_b/frame_angle_c/frame_angle_d/frame_thrust_a/frame_thrust_b/frame_thrust_c/frame_thrust_d/frame_assembly', args: [{type: "f", value: 1}] }, EOS_CONSOLE_IP, EOS_CONSOLE_PORT);
     return osc;
   }
   return false;
@@ -439,9 +457,10 @@ function oscHandler(oscMsg) {
       displayMain('LXQ: '+parts[0], parts[1], parts[2]);
     }
     strLastCueState = oscMsg.args[0].value;
+  } else if (oscMsg.address.match(/\/out\/color/i)) {
+    return;
   } else if (bolReady && oscMsg.address.match(/\/active\/wheel/i)) {
-    var now = Date.now();
-    if (now > intLastAct+300) return;
+    /* we don't use this method any more
     const parts = oscMsg.args[0].value.match(/(.*)\[/);
     const label = parts[1].trim();
     const value = oscMsg.args[2].value.toFixed(2)+'';
@@ -450,6 +469,34 @@ function oscHandler(oscMsg) {
       return;
     }
     encoderPop(label,value,'');
+    */
+    return;
+  } else if (bolReady && oscMsg.address.match(/\/eos\/out\/param\//i)) {
+    var now = Date.now();
+    const parts = oscMsg.address.match(/\/eos\/out\/param\/([a-z0-9_]+)/i);
+    const attrib = parts[1];
+
+    // use this to monitor what attribs are available
+    const encId = encMap[attrib];
+    if (!(encId > 0)) return; // we dont know about this attribute
+
+    if (ENCODER_DYNAMIC) {
+      if (oscMsg.args.length == 0) {
+         console.log('No '+attrib);
+         // turn it off
+         MIDItx([176,encId,0]);
+         return;
+      } else {
+         // turn it on again
+         MIDItx([176,encId,ctl[encId].col]);
+      }
+    }
+    if (now > intLastAct+300) return;
+
+    // beyond this point it's probably the realtime display for a changing attribute
+    const label = attrib.replace('_',' ').ucFirst();
+    value = oscMsg.args[0].value.toFixed(2)+'';
+    encoderPop(label, value, 'PARAM');
   } else if (bolReady && oscMsg.address.match(/\/eos\/fader\/1/i)) {
     var now = Date.now();
     // if (now > intLastAct+900) return;
@@ -511,6 +558,10 @@ function MIDItx(message) {
     midiConnected = false;
   }
 }
+
+String.prototype.ucFirst = function () {
+    return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+};
 
 setTimeout(function() { bolReady = true; }, 2000);
 setInterval(updateFaders, 400);
