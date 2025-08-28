@@ -79,3 +79,5 @@ If the console is locked, a CONSOLE LOCKED message is displayed on the LaunchCon
 Glad you asked, if you find this useful please consider using this affiliate link to get yours from Amazon :) 
 
 https://amzn.to/4m6tObU
+
+Also, in a bit of shameless self-promotion, maybe you want a keyboard to help make programming easier too? I'm responsible for the original lxkey and after a few issues it's available again (but in small batches at a time that sell out quickly) at lxkey.co.uk :) 
