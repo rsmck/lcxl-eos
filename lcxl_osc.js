@@ -495,16 +495,7 @@ function oscHandler(oscMsg) {
   } else if (oscMsg.address.match(/\/out\/color/i)) {
     return;
   } else if (bolReady && oscMsg.address.match(/\/active\/wheel/i)) {
-    /* we don't use this method any more
-    const parts = oscMsg.args[0].value.match(/(.*)\[/);
-    const label = parts[1].trim();
-    const value = oscMsg.args[2].value.toFixed(2)+'';
-    // filter out messages that aren't for the value we're actively changing
-    if (!label.replace(/[^a-z]/gi, '').toLowerCase().trim().match(strLastAct)) {
-      return;
-    }
-    encoderPop(label,value,'');
-    */
+    /* we don't use this method any more */
     return;
   } else if (bolReady && oscMsg.address.match(/\/eos\/out\/param\//i)) {
     var now = Date.now();
