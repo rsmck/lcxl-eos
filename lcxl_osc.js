@@ -17,26 +17,56 @@
  */
 
 // Require
-const midi = require('midi');
+const midi = require('@julusian/midi');
+const fs = require("fs");
 const oscjs = require("osc");
 const util = require ("util");
+const { Command, Option } = require('commander');
+
+const prog = new Command();
+prog.name('lxcl_eos')
+    .description('LaunchControlXL for ETCnomad Eos')
+    .version('0.1.1');
+
+prog.option('-h, --host <ip>', 'Eos Host IP', '127.0.0.1');
+prog.option('-p, --port <number>', 'Eos Host port number', '9061');
+prog.option('-l, --list-midi', 'List MIDI Devices');
+prog.addOption(new Option('--debg').hideHelp());
+
+prog.parse();
+
+const options = prog.opts();
+
+const EOS_CONSOLE_IP = options.host;
+const EOS_CONSOLE_PORT = options.port;
+const EOS_PROTO = 'tcp';
+const DEBUG = options.debg;
+const LIST_MIDI = options.listMidi;
+const FADER_MISMATCH_CATCH = true;
+const FADER_MANTIME_FLASH = true;
+const ENCODER_DYNAMIC = true;
+
+// show options
+if (DEBUG) { console.log({opts: options}); }
+
+// BANNER
+console.log('  o  o ');
+console.log('  |  |    LaunchControl XL for ETC Eos (ETCnomad) ');
+console.log('  |  |    ');
+console.log(' [-] |    © 2025 Ross Henderson (RMLX) ');
+console.log('  | [-]     https://rmlx.co.uk/lcxl');
+console.log('  |  |');
+console.log('');
+console.log('  ** THIS IS BETA SOFTWARE PROVIDED AS-IS AND WITHOUT WARRANTY **');
+console.log('');
+
+console.log("Attempting to connect to Eos at "+EOS_CONSOLE_IP+":"+EOS_CONSOLE_PORT+"\n");
 
 // MIDI Interface
 let input = new midi.Input();
 let output = new midi.Output();
 let midiConnected = false;
 let midiReconnectInterval = 3000;
-
-// EOS
-const EOS_CONSOLE_IP = "127.0.0.1";
-const EOS_PROTO = 'tcp';
-const EOS_CONSOLE_PORT = 5604;
-
-// config
-const DEBUG = false;
-const FADER_MISMATCH_CATCH = true;
-const FADER_MANTIME_FLASH = true; 
-const ENCODER_DYNAMIC = true;
 
 // State
 var strLastCueState = '';
@@ -167,27 +197,28 @@ function connectMIDI() {
     }
 
     // Print available ports
-    console.log('Available MIDI input ports:');
+    console.log('Available MIDI ports:');
     for (let i = 0; i < portCount; i++) {
       if (input.getPortName(i) == 'LCXL3 1 DAW Out' && inputId == 0) { 
         inputId = i; 
         console.log(`${i}: ${input.getPortName(i)} ** SELECTED **`);
       } else {
-        console.log(`${i}: ${input.getPortName(i)}`);
-      }
-    }
-    for (let i = 0; i < portCount; i++) {
-      if (output.getPortName(i) == 'LCXL3 1 DAW In' && outputId == 0) { 
-        outputId = i; 
-        console.log(`${i}: ${output.getPortName(i)} ** SELECTED **`);
-      } else {
-        console.log(`${i}: ${output.getPortName(i)}`);
+        if (DEBUG || LIST_MIDI) { console.log(`${i}: ${input.getPortName(i)}`); }
       }
     }
 
-    if (outputId === 0 && inputId === 0) {
-      console.log('No LaunchControl XL device found.');
-      process.exit(1);
+    for (let i = 0; i < portCount; i++) {
+      if (output.getPortName(i) == 'LCXL3 1 DAW In' && outputId == 0) { 
+        outputId = i; 
+        if (DEBUG || LIST_MIDI) { console.log(`${i}: ${output.getPortName(i)} ** SELECTED **`); }
+      } else {
+        if (DEBUG || LIST_MIDI) { console.log(`${i}: ${output.getPortName(i)}`); }
+      }
+    }
+
+    if (outputId === 0 && inputId === 0) { 
+      console.log("\nFATAL: No LaunchControl XL device found. Exiting.");
+      if (!DEBUG) { process.exit(1); }
     }
 
     // Connect to LCXL
