@@ -51,7 +51,7 @@ Some faders are colour-coded;
 - Global FX Purple
 - Grand Master Red (Both buttons shown red, as top button is not configurable)
  
-It's not possible to determine an inhibited sub by OSC, but if you include 'Inhib' in the name then it will be shown red rather than green in the lower button - it's a bit hacky buit it works.
+It's possible to determine an inhibited sub by OSC but the script currently doesn't do that. By convention I tend to include 'Inhib' in the name, if you do then it will be shown red rather than green in the lower button - it's a bit hacky buit it works.
 
 As of v0.0.3 Manual Time faders will be shown blue and can optionally flash to indicate the selected time subject to the following limitations;
 - The time must be set on the LaunchControl, if you set it elsewhere it wont update (yet)
